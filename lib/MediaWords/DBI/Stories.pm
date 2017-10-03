@@ -26,7 +26,6 @@ use HTML::Entities;
 use List::Compare;
 use List::Util;
 
-use MediaWords::DB::StoryTriggers;
 use MediaWords::DBI::Downloads;
 use MediaWords::DBI::Stories::ExtractorVersion;
 use MediaWords::DBI::Stories::ExtractorArguments;
@@ -477,17 +476,12 @@ sub _update_story_disable_triggers
 {
     my ( $db, $story ) = @_;
 
-    my $config_disable_triggers = MediaWords::DB::StoryTriggers::story_triggers_disabled() ? 1 : 0;
     my $story_disable_triggers = $story->{ disable_triggers } ? 1 : 0;
 
-    if ( $config_disable_triggers != $story_disable_triggers )
+    unless ( $story_disable_triggers )
     {
         my $allow_null = 1;
-        $db->query(
-            "UPDATE stories SET disable_triggers  = ? WHERE stories_id = ?",
-            normalize_boolean_for_db( MediaWords::DB::StoryTriggers::story_triggers_disabled(), $allow_null ),
-            $story->{ stories_id }
-        );
+        $db->query( "UPDATE stories SET disable_triggers = 'f' WHERE stories_id = ?", $story->{ stories_id } );
     }
 }
 
@@ -768,9 +762,8 @@ sub mark_as_processed($$)
         $db->insert(
             'processed_stories',
             {
-                stories_id => $stories_id,    #
-                disable_triggers =>
-                  normalize_boolean_for_db( MediaWords::DB::StoryTriggers::story_triggers_disabled(), $allow_null ),    #
+                stories_id       => $stories_id,    #
+                disable_triggers => undef,          #
             }
         );
     };

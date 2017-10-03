@@ -23,7 +23,7 @@ CREATE OR REPLACE FUNCTION set_database_schema_version() RETURNS boolean AS $$
 DECLARE
     -- Database schema version number (same as a SVN revision number)
     -- Increase it by 1 if you make major database schema changes.
-    MEDIACLOUD_DATABASE_SCHEMA_VERSION CONSTANT INT := 4631;
+    MEDIACLOUD_DATABASE_SCHEMA_VERSION CONSTANT INT := 4632;
 
 BEGIN
 
@@ -116,36 +116,6 @@ $$
 $$
 LANGUAGE 'plpgsql';
 
--- Store whether story triggers should be enable in PRIVATE.use_story_triggers
--- This variable is session based. If it's not set, set it to enable triggers and return true
-CREATE OR REPLACE FUNCTION  story_triggers_enabled() RETURNS boolean  LANGUAGE  plpgsql AS $$
-BEGIN
-
-    BEGIN
-       IF current_setting('PRIVATE.use_story_triggers') = '' THEN
-          perform enable_story_triggers();
-       END IF;
-       EXCEPTION when undefined_object then
-        perform enable_story_triggers();
-
-     END;
-
-    return true;
-    return current_setting('PRIVATE.use_story_triggers') = 'yes';
-END$$;
-
-CREATE OR REPLACE FUNCTION  enable_story_triggers() RETURNS void LANGUAGE  plpgsql AS $$
-DECLARE
-BEGIN
-        perform set_config('PRIVATE.use_story_triggers', 'yes', false );
-END$$;
-
-CREATE OR REPLACE FUNCTION  disable_story_triggers() RETURNS void LANGUAGE  plpgsql AS $$
-DECLARE
-BEGIN
-        perform set_config('PRIVATE.use_story_triggers', 'no', false );
-END$$;
-
 CREATE OR REPLACE FUNCTION last_updated_trigger () RETURNS trigger AS
 $$
    DECLARE
@@ -165,7 +135,7 @@ $$
            END IF;
       END IF;
 
-      IF ( story_triggers_enabled() ) AND ( ( TG_OP = 'UPDATE' ) OR (TG_OP = 'INSERT') ) then
+      IF ( ( TG_OP = 'UPDATE' ) OR (TG_OP = 'INSERT') ) then
 
       	 NEW.db_row_last_updated = now();
 
@@ -181,10 +151,6 @@ $$
    DECLARE
       path_change boolean;
    BEGIN
-
-        IF NOT story_triggers_enabled() THEN
-           RETURN NULL;
-        END IF;
 
         IF NEW.disable_triggers THEN
            RETURN NULL;
@@ -204,10 +170,6 @@ $$
         table_with_trigger_column  boolean default false;
         reference_stories_id integer default null;
     BEGIN
-
-       IF NOT story_triggers_enabled() THEN
-           RETURN NULL;
-        END IF;
 
         IF TG_TABLE_NAME in ( 'processed_stories', 'stories', 'story_sentences') THEN
            table_with_trigger_column = true;
@@ -256,14 +218,6 @@ $$
         table_with_trigger_column  boolean default false;
         reference_story_sentences_id bigint default null;
     BEGIN
-
-       IF NOT story_triggers_enabled() THEN
-           RETURN NULL;
-        END IF;
-
-       IF NOT story_triggers_enabled() THEN
-           RETURN NULL;
-        END IF;
 
         IF TG_TABLE_NAME in ( 'processed_stories', 'stories', 'story_sentences') THEN
            table_with_trigger_column = true;
@@ -1091,10 +1045,6 @@ create function insert_ss_media_stats() returns trigger as $$
 begin
 
 
-    IF NOT story_triggers_enabled() THEN
-      RETURN NULL;
-    END IF;
-
     update media_stats set num_sentences = num_sentences + 1
         where media_id = NEW.media_id and stat_date = date_trunc( 'day', NEW.publish_date );
 
@@ -1110,10 +1060,6 @@ declare
     new_date date;
     old_date date;
 begin
-
-    IF NOT story_triggers_enabled() THEN
-       RETURN NULL;
-    END IF;
 
     select date_trunc( 'day', NEW.publish_date ) into new_date;
     select date_trunc( 'day', OLD.publish_date ) into old_date;
@@ -1135,10 +1081,6 @@ create trigger ss_update_story_media_stats after update
 create function delete_ss_media_stats() returns trigger as $$
 begin
 
-    IF NOT story_triggers_enabled() THEN
-       RETURN NULL;
-    END IF;
-
     update media_stats set num_sentences = num_sentences - 1
     where media_id = OLD.media_id and stat_date = date_trunc( 'day', OLD.publish_date );
 
@@ -1151,10 +1093,6 @@ create trigger story_delete_ss_media_stats after delete
 -- update media stats table for new story. create the media / day row if needed.
 create or replace function insert_story_media_stats() returns trigger as $insert_story_media_stats$
 begin
-
-    IF NOT story_triggers_enabled() THEN
-       RETURN NULL;
-    END IF;
 
     insert into media_stats ( media_id, num_stories, num_sentences, stat_date )
         select NEW.media_id, 0, 0, date_trunc( 'day', NEW.publish_date )
@@ -1177,10 +1115,6 @@ declare
     new_date date;
     old_date date;
 begin
-
-    IF NOT story_triggers_enabled() THEN
-       RETURN NULL;
-    END IF;
 
     select date_trunc( 'day', NEW.publish_date ) into new_date;
     select date_trunc( 'day', OLD.publish_date ) into old_date;
@@ -1210,10 +1144,6 @@ create trigger stories_update_story_media_stats after update
 -- update media stats table for deleted story
 create function delete_story_media_stats() returns trigger as $delete_story_media_stats$
 begin
-
-    IF NOT story_triggers_enabled() THEN
-       RETURN NULL;
-    END IF;
 
     update media_stats set num_stories = num_stories - 1
     where media_id = OLD.media_id and stat_date = date_trunc( 'day', OLD.publish_date );
